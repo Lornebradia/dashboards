@@ -18,6 +18,7 @@ library(shiny)
 library(flexdashboard)
 library(glue)
 library(tidyverse)
+library(magrittr)
 library(lubridate)
 library(rmarkdown)
 library(patchwork)
@@ -69,25 +70,14 @@ all_ncov <- load_nCov2019(lang = "en") %>%
   .['global'] %>% 
   tbl_df()
 
-  # mutate(
-  #   country = case_when(
-  #     country == "Republika Severna Makedonija" ~ "Macedonia",
-  #     country == "Réunion" ~ "Reunion",
-  #     TRUE ~ country
-  #   )
-  # ) %>%
-  # filter(!is.na(country)) %>% 
-  # left_join(con_table, by = "country") %>% 
-  # mutate(region = ifelse(is.na(region), "None", region))
+first_case_date <- all_ncov %>% 
+  group_by(country) %>% 
+  summarise(first_conf = min(time))
 
-# mapping_countries <- all_ncov %>% 
-#   select(country, region) %>% 
-#   count(region, country) %>% 
-#   select(1:2) %>% 
-#   group_by(region) %>% 
-#   nest() 
-# 
-# mapping_countries <- setNames((mapping_countries$data), mapping_countries$region)
+all_ncov %<>% 
+  left_join(first_case_date) %>% 
+  mutate(first_conf = as.numeric(time - first_conf)) %>% 
+  select(time, first_conf, everything())
 
 ```
 
@@ -116,14 +106,6 @@ selectizeInput("country", options = list(maxItems = 6),
 Select also a range of dates to filter the data. By default, the data range is set from the first case reported in the dataset, December 01 2019, and today,  `r format(Sys.Date(), "%B %d %Y")`. 
 
 ```{r}
-# sliderInput("daterange", label = strong("Date Range"),
-#             min = min(all_ncov$time), 
-#             max = max(all_ncov$time), 
-#             value = c(min(all_ncov$time),max(all_ncov$time)),
-#             step = 1,
-#             animate = TRUE
-# )
-
 dateRangeInput("daterange", label = strong("Date Range"),
                start = min(all_ncov$time),
                end = max(all_ncov$time))
@@ -132,15 +114,16 @@ dateRangeInput("daterange", label = strong("Date Range"),
 checkboxInput("logaxis", label = strong("Use log axis?"), 
               value = FALSE)
 
+checkboxInput("startconf", 
+              label = strong("Start analysis from first case confirmed?"), 
+              value = FALSE)
+
 df <- reactive({
   all_ncov %>% 
     filter(country %in% input$country, 
            time >= input$daterange[1], 
            time <= input$daterange[2])
 })
-
-
-
 ```
 
 
@@ -228,26 +211,39 @@ Row {data-height=500}
 
 ```{r}
 renderPlot({
-  cumplot <- df() %>% 
-    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_confirm)}"), NA)) %>% 
-    ggplot(aes(time, cum_confirm, color = country))+
+  cumplot <- df() %>%
+    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_confirm)}"), NA))
+
+  if (input$startconf){
+    cumplot %<>% ggplot(aes(first_conf, cum_confirm, color = country))
+  }else{
+    cumplot %<>% ggplot(aes(time, cum_confirm, color = country))
+  }
+
+  cumplot <- cumplot +
     geom_line()+
-    geom_label_repel(aes(label = end_label, fill = country), 
-                     nudge_x = .1, 
-                     nudge_y = .5, 
+    geom_label_repel(aes(label = end_label, fill = country),
+                     nudge_x = .1,
+                     nudge_y = .5,
                      size = 5,
-                     color = "white", 
+                     color = "white",
                      show.legend = FALSE
     )+
-    labs(x = "",
-         caption = glue("Data last updated on {max(df()$time)}"))
+    labs(caption = glue("Data last updated on {max(df()$time)}"))
+
+  if (input$startconf){
+    cumplot <- cumplot + labs(x = "Days elapsed since first confirmed case")
+  }else{
+    cumplot <- cumplot + labs(x = "Date")
+  }
+
   
   if(input$logaxis) {
     cumplot + scale_y_log10("Log number of cases", labels = scales::comma)
   }else{
     cumplot + scale_y_continuous("Number of cases", labels = scales::comma)
   }
-  
+
 })
 
 ```
@@ -257,20 +253,32 @@ renderPlot({
 ```{r}
 renderPlot({
   deathplot <- df() %>% 
-    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_dead)}"), NA)) %>% 
-    ggplot(aes(time, cum_dead, color = country))+
+    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_dead)}"), NA))
+  
+  if (input$startconf){
+    deathplot %<>% ggplot(aes(first_conf, cum_dead, color = country))
+  }else{
+    deathplot %<>% ggplot(aes(time, cum_dead, color = country))
+  }
+  
+  
+  deathplot <- deathplot +
     geom_line()+
-    geom_label_repel(aes(label = end_label, fill = country), 
-                     nudge_x = .1, 
-                     nudge_y = .5, 
+    geom_label_repel(aes(label = end_label, fill = country),
+                     nudge_x = .1,
+                     nudge_y = .5,
                      size = 5,
-                     color = "white", 
+                     color = "white",
                      show.legend = FALSE
     )+
-    labs(x = "",
-         caption = glue("Data last updated on {max(df()$time)}"))
-  
-  
+    labs(caption = glue("Data last updated on {max(df()$time)}"))
+
+   if (input$startconf){
+    deathplot <- deathplot + labs(x = "Days elapsed since first fatality")
+  }else{
+    deathplot <- deathplot + labs(x = "Date")
+  }
+
   if(input$logaxis) {
     deathplot + scale_y_log10("Log number of deaths", labels = scales::comma)
   }else{
@@ -300,7 +308,7 @@ df_speed <- reactive({
 })
 
 renderPlot({
-  df_daily() %>%
+  df_speed() %>%
     mutate(seconddif = cases_confirm - lag(cases_confirm)) %>% 
     ggplot(aes(time, cases_confirm))+
     scale_y_continuous(labels = scales::comma)+
@@ -331,7 +339,7 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  df_daily() %>%
+  df_speed() %>%
     mutate(seconddif = cases_dead - lag(cases_dead)) %>% 
     ggplot(aes(time, cases_dead))+
     scale_y_continuous(labels = scales::comma)+
@@ -370,11 +378,11 @@ Sidebar {.sidebar}
 
 # Days since first case
 
-df_origin <- reactive({
-  df() %>% 
-    
-  
-})
+# df_origin <- reactive({
+#   df() %>% 
+#     
+#   
+# })
 
 # 
 # selectInput("singlecountry",
