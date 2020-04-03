@@ -1,7 +1,6 @@
 ---
 title: "Coronavirus Analysis"
 runtime: shiny
-author: "Lorenzo Braschi"
 output: 
   flexdashboard::flex_dashboard:
     storyboard: true
@@ -12,7 +11,9 @@ output:
 ---
 
 ```{r global, include=FALSE}
-
+# TODO: revise the list of packages
+# TODO: consider switching to rBokeh
+# TODO: modelling and/or simulation
 library(shiny)
 # library(rvest)
 library(flexdashboard)
@@ -77,10 +78,7 @@ all_ncov %<>%
 Sidebar {.sidebar}
 =======================================================================
 
-
-
-The nCov2019 package available from [their GitHub site](https://github.com/GuangchuangYu/nCov2019) provides up-to date information about the COVID-19 epidemic. The data is focused on China, but it contains access to data from the rest of the world as well. They also provide a useful [vignette](https://guangchuangyu.github.io/nCov2019/) in which the common usage of the package is explained.
-
+This dashboard shows causualty information about the COVID-19 epidemic. More information on the **About** page. 
 
 Select one or more countries to run the analysis. 
 
@@ -100,7 +98,7 @@ Select also a range of dates to filter the data. By default, the data range is s
 
 ```{r}
 dateRangeInput("daterange", label = strong("Date Range"),
-               start = "2020-02-1",
+               start = min(all_ncov$time),
                end = max(all_ncov$time))
 
 
@@ -120,12 +118,13 @@ df <- reactive({
 ```
 
 
-Dashboard last updated on **`r format(Sys.Date(), "%B %d %Y")`**. 
+_Last update_:   
+**`r format(Sys.time(), "%B %d %Y at %H:%M CEST")`**. 
 
 Summary
 =======================================================================
 
-Row {data-height=100}
+Row 
 -----------------------------------------------------------------------
 
 ### confirmed {.value-box}
@@ -198,8 +197,45 @@ renderValueBox({
 })
 ```
 
+### recovered {.value-box}
 
-Row {data-height=500}
+```{r}
+# TODO: Add recovered
+renderValueBox({
+  max_heal <- df() %>%
+    filter(time == min(input$daterange[2], max(time))) %>%
+    summarise(cum_heal = sum(cum_heal)) %>%
+    pluck("cum_heal")
+  valueBox(
+    value = paste(format(max_heal, big.mark = ","), "", sep = " "),
+    caption = "Total recovered cases in the countries selected to date",
+    icon = icon("user-shield", lib = "font-awesome"),
+    color = recovered_color
+  )
+})
+
+```
+
+### all confirmed {.value-box}
+
+```{r}
+renderValueBox({
+  all_heal <- all_ncov %>%
+    filter(time == min(input$daterange[2], max(time))) %>%
+    summarise(cum_heal = sum(cum_heal)) %>%
+    pluck("cum_heal")
+  valueBox(
+    value = paste(format(all_heal, big.mark = ","), "", sep = " "),
+    caption = "Worldwide recovered cases to date",
+    icon = "fas procedures",
+    color = "darkgreen"
+  )
+})
+
+```
+
+
+Row {.tabset}
 -----------------------------------------------------------------------
 
 ### **Cumulative cases per country**
@@ -283,24 +319,56 @@ renderPlot({
 
 ```
 
+### **Cumulative recoveries per country**
+
+```{r}
+renderPlot({
+  recplot <- df() %>% 
+    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_heal)}"), NA))
+  
+  if (input$startconf){
+    recplot %<>% ggplot(aes(first_conf, cum_heal, color = country))
+  }else{
+    recplot %<>% ggplot(aes(time, cum_heal, color = country))
+  }
+  
+  recplot <- recplot +
+    geom_line()+
+    geom_label_repel(aes(label = end_label, fill = country),
+                     nudge_x = .1,
+                     nudge_y = .5,
+                     size = 5,
+                     color = "white",
+                     show.legend = FALSE
+    )+
+    labs(caption = glue("Data last updated on {max(df()$time)}"))
+
+   if (input$startconf){
+    recplot <- recplot + labs(x = "Days elapsed since first confirmed case")
+  }else{
+    recplot <- recplot + labs(x = "Date")
+  }
+
+  if(input$logaxis) {
+    recplot + scale_y_log10("Log number of recovered", labels = scales::comma)
+  }else{
+    recplot + scale_y_continuous("Number of recovered", labels = scales::comma)
+  }
+})
+
+```
+
 Progression
 ===========================================================================
 
-Row {data-height=10}
+Row {data-height=750}
 ---------------------------------------------------------------------------
 
-### **Progression of COVID-19**
-
-Speed of the disease can be defined as the rate in which new cases or new fatalities appear. To smooth over the daily noise in reporting these numbers, we can take a moving average (loess). 
-
-
-Row {data-height=300}
----------------------------------------------------------------------------
-
-### **Speed of new cases**
-
+### **Acceleration of new cases**
 
 ```{r}
+# TODO: Refactor as a single function
+
 df_speed <- reactive({
   df() %>%
     arrange(country, time) %>%
@@ -314,61 +382,75 @@ df_speed <- reactive({
 })
 
 renderPlot({
-  df_speed() %>%
-    mutate(seconddif = cases_confirm - lag(cases_confirm)) %>% 
-    ggplot(aes(time, cases_confirm))+
-    scale_y_continuous(labels = scales::comma)+
+  d <- df_speed() %>%
+    mutate(seconddif = cases_confirm - lag(cases_confirm)) 
+  dmin <- d %>% 
+    filter(time == min(time))
+    
+  ggplot(d)+
+    aes(time, seconddif)+
+    geom_rect(data = dmin,
+      aes(xmin = time,
+          xmax = input$daterange[2],
+          ymin = -Inf, ymax = 0),
+      fill = "forestgreen",
+      alpha = .3)+
+    geom_rect(data = dmin,
+      aes(xmin = time,
+          xmax = input$daterange[2],
+          ymin = 0, ymax = Inf),
+      alpha = .3,
+      fill = "firebrick")+
     scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
-    annotate(geom = "rect",
-             xmin = input$daterange[1], xmax = input$daterange[2],
-             ymin = -Inf, ymax = 0, 
-             alpha = .25,
-             fill = "forestgreen")+
-    annotate(geom = "rect",
-             xmin = input$daterange[1], xmax = input$daterange[2],
-             ymin = 0, ymax = Inf, 
-             alpha = .25,
-             fill = "firebrick")+
+    scale_y_continuous(labels = scales::comma)+
     facet_wrap(~country, scales = "free")+
     geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(y = seconddif, color = country), alpha = .4)+
-    geom_smooth(aes(y = seconddif, color = country), 
-                method = "loess", span = 1/3,
-                se = FALSE, size = 1)+
-    labs(x = "",
-         y = "Diff cases", 
-         title = "New cases acceleration rate", 
-         caption = "Y axes not to scale")+
+    geom_line(aes(color = country), alpha = .8)+
+    geom_smooth(aes(color = country),
+      method = "loess", span = 1/3,
+      se = FALSE, size = 1)+
+    labs(
+      x = "",
+      y = "Diff cases", 
+      title = "New cases acceleration rate", 
+      caption = "Y axes not to scale")+
     theme(panel.grid = element_blank())
+  
 })
 
 
 
 ```
 
-### **Speed of new fatalities** 
+### **Acceleration of new fatalities** 
 
 ```{r}
 renderPlot({
-  df_speed() %>%
-    mutate(seconddif = cases_dead - lag(cases_dead)) %>% 
-    ggplot(aes(time, cases_dead))+
+  d <- df_speed() %>%
+    mutate(seconddif = cases_dead - lag(cases_dead))
+  dmin <- d %>% 
+    filter(time == min(time))
+  
+  ggplot(d)+
+    aes(time, seconddif) +
     scale_y_continuous(labels = scales::comma)+
     scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
-    annotate(geom = "rect",
-             xmin = input$daterange[1], xmax = input$daterange[2],
-             ymin = -Inf, ymax = 0, 
-             alpha = .25,
-             fill = "forestgreen")+
-    annotate(geom = "rect",
-             xmin = input$daterange[1], xmax = input$daterange[2],
-             ymin = 0, ymax = Inf, 
-             alpha = .25,
-             fill = "firebrick")+
+    geom_rect(data = dmin,
+      aes(xmin = time,
+          xmax = input$daterange[2],
+          ymin = -Inf, ymax = 0),
+      fill = "forestgreen",
+      alpha = .3)+
+    geom_rect(data = dmin,
+      aes(xmin = time,
+          xmax = input$daterange[2],
+          ymin = 0, ymax = Inf),
+      alpha = .3,
+      fill = "firebrick")+
     facet_wrap(~country, scales = "free")+
     geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(y = seconddif, color = country), alpha = .4)+
-    geom_smooth(aes(y = seconddif, color = country), 
+    geom_line(aes(color = country), alpha = .8)+
+    geom_smooth(aes(color = country), 
                 method = "loess", span = 1/3,
                 se = FALSE, size = 1)+
     labs(x = "",
@@ -381,51 +463,51 @@ renderPlot({
 ```
 
 
+Row 
+---------------------------------------------------------------------------
+
+### **Progression of COVID-19**
+
+Speed of the disease can be defined as the rate in which new cases or new fatalities appear. In this sense, **speed** is just the number of new cases reported per day. A speed of zero means no new cases ocurred. In this context, speed cannot be below zero, as it would be meaningless (although sometimes a negative number is reported to correct previously inflated cases, a general bad practice). 
+
+**Acceleration** is therefore the _second order difference_, that is, the difference between today's speed and yesterday's. An acceleration of _zero_ means that today's increase is the same as yesterday's, and an _negative_ acceleration means that the rate at which new cases happen is reducing. A _positive_ acceleration, on the other hand, means that the rate of new cases is increasing - today's new cases is larger than yesterday's. 
+
+To sum up, we can envision four scenarios (from better to worse): 
+
+1. __Speed = 0__ and __Acceleration = 0__:  best case scenario, no new cases today same as yesterday. 
+1. __Speed > 0__ and __Acceleration < 0__:  New cases appeared, but less than yesterday. 
+1. __Speed > 0__ and __Acceleration = 0__: New cases appeared, at the same rate as yesterday. 
+1. __Speed > 0__ and __Acceleration > 0__: New cases appeared, and at a higher rate than yesterday. 
 
 
+To smooth over the daily noise in reporting these numbers, we can take a moving average (loess). 
 
 
 About
 =======================================================================
 
-<p style="color:red">**WORK IN PROGRESS**</p>
-
-```{r}
-# TODO: A description of the data, links, and source code for the app. 
-# TODO: Link to the blog
-```
-
-
 **The Coronavirus Dashboard**
 
 This dashboard summarises the status of the 2019-2020 coronavirus epidemic COVID-19 in the world. The dashboard is build using the  [flexdashboards](https://rmarkdown.rstudio.com/flexdashboard/index.html){target="_blank"} by RStudio and published to [shinyapps.io](https://www.shinyapps.io/){target="_blank"}. 
 
-The data used for this report comes from a variety of sources, gathered in the [`nCov2019` R package](https://github.com/GuangchuangYu/nCov2019){target="_blank"}. This package provides up-to date information about the COVID-19 epidemic. The dataset focuses on China, but it also contains functions to access data from the rest of the world. The package [vignette](https://guangchuangyu.github.io/nCov2019/){target="_blank"} explains the general functionality of the package.
 
 **Code**
 
-<!-- The code behind this dashboard is available on [GitHub](https://github.com/AntoineSoetewey/coronavirus_dashboard){target="_blank"}. -->
+The code behind this dashboard is available on [GitHub](https://github.com/Lornebradia/dashboards/blob/master/dashboards/coronavirus.Rmd){target="_blank"}.
 
-<!-- **Data** -->
+**Data**
 
-<!-- The input data for this dashboard is the dataset available from the [`{coronavirus}`](https://github.com/RamiKrispin/coronavirus){target="_blank"} R package. Make sure to download the development version of the package to have the latest data: -->
+The data used for this report comes from a variety of sources, gathered in the [`nCov2019` R package](https://github.com/GuangchuangYu/nCov2019){target="_blank"}. This package provides up-to date information about the COVID-19 epidemic. The dataset focuses on China, but it also contains functions to access data from the rest of the world. The package [vignette](https://guangchuangyu.github.io/nCov2019/){target="_blank"} explains the general functionality of the package.
 
-<!-- ``` -->
-<!-- install.packages("devtools") -->
-<!-- devtools::install_github("RamiKrispin/coronavirus") -->
-<!-- ``` -->
+You can install this package by running: 
 
-<!-- The data and dashboard are refreshed on a daily basis. -->
+```
+remotes::install_github("GuangchuangYu/nCov2019")
+```
 
-<!-- The raw data is pulled from the Johns Hopkins University Center for Systems Science and Engineering (JHU CCSE) Coronavirus [repository](https://github.com/RamiKrispin/coronavirus-csv){target="_blank"}. -->
+The data and dashboard are refreshed on a daily basis.
 
-<!-- **Contact** -->
+**Contact**
 
-<!-- For any question or feedback, you can [contact me](https://www.statsandr.com/contact/). More information about this dashboard can be found in this [article](https://www.statsandr.com/blog/how-to-create-a-simple-coronavirus-dashboard-specific-to-your-country-in-r/). -->
+Comments & suggestions welcome! You can [open an issue](https://github.com/Lornebradia/dashboards/issues/new){target="_blank"} in the repository for the dashboard. 
 
-<!-- **Update** -->
-
-
-
-
-<!-- *Go back to [www.statsandr.com](https://www.statsandr.com/) (blog) or [www.antoinesoetewey.com](https://www.antoinesoetewey.com/) (personal website)*. -->
