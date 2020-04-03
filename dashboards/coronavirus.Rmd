@@ -34,11 +34,26 @@ death_color <- "firebrick"
 # Theme for plots
 
 theme_set(theme_minimal()+
-            theme(legend.position = "",
-                  plot.title = element_text(face = "bold", colour = "grey40"),
-                  strip.text.y = element_text(angle = 0),
-                  plot.caption = element_text(face = "bold.italic", 
-                                              colour = "grey40")
+            theme(
+              legend.position = "",
+              plot.title = element_text(
+                size = 15,
+                face = "bold",
+                colour = "grey40"),
+              strip.text = element_text(
+                face = "bold",
+                size = 15),
+              axis.title = element_text(
+                size = 15, 
+                face = "bold"
+              ),
+              axis.text = element_text(
+                size = 13
+              ),
+              plot.caption = element_text(
+                size = 12,
+                face = "bold.italic", 
+                colour = "grey40")
             )
 )
 
@@ -58,15 +73,14 @@ all_ncov %<>%
 ```
 
 
-Summary
-=======================================================================
 
 Sidebar {.sidebar}
--------------------------------------------------------------------------------
+=======================================================================
+
+
 
 The nCov2019 package available from [their GitHub site](https://github.com/GuangchuangYu/nCov2019) provides up-to date information about the COVID-19 epidemic. The data is focused on China, but it contains access to data from the rest of the world as well. They also provide a useful [vignette](https://guangchuangyu.github.io/nCov2019/) in which the common usage of the package is explained.
 
-The nCov2019 package contains data for `r length(unique(all_ncov$country))` countries. 
 
 Select one or more countries to run the analysis. 
 
@@ -82,11 +96,11 @@ selectizeInput("country", options = list(maxItems = 6),
 
 ```
 
-Select also a range of dates to filter the data. By default, the data range is set from the first case reported in the dataset, December 01 2019, and today,  `r format(Sys.Date(), "%B %d %Y")`. 
+Select also a range of dates to filter the data. By default, the data range is set from February 01 2020 to yesterday,  `r format(Sys.Date()-1, "%B %d %Y")`. 
 
 ```{r}
 dateRangeInput("daterange", label = strong("Date Range"),
-               start = min(all_ncov$time),
+               start = "2020-02-1",
                end = max(all_ncov$time))
 
 
@@ -108,6 +122,8 @@ df <- reactive({
 
 Dashboard last updated on **`r format(Sys.Date(), "%B %d %Y")`**. 
 
+Summary
+=======================================================================
 
 Row {data-height=100}
 -----------------------------------------------------------------------
@@ -253,7 +269,7 @@ renderPlot({
     labs(caption = glue("Data last updated on {max(df()$time)}"))
 
    if (input$startconf){
-    deathplot <- deathplot + labs(x = "Days elapsed since first fatality")
+    deathplot <- deathplot + labs(x = "Days elapsed since first confirmed case")
   }else{
     deathplot <- deathplot + labs(x = "Date")
   }
@@ -266,6 +282,17 @@ renderPlot({
 })
 
 ```
+
+Progression
+===========================================================================
+
+Row {data-height=10}
+---------------------------------------------------------------------------
+
+### **Progression of COVID-19**
+
+Speed of the disease can be defined as the rate in which new cases or new fatalities appear. To smooth over the daily noise in reporting these numbers, we can take a moving average (loess). 
+
 
 Row {data-height=300}
 ---------------------------------------------------------------------------
@@ -291,6 +318,7 @@ renderPlot({
     mutate(seconddif = cases_confirm - lag(cases_confirm)) %>% 
     ggplot(aes(time, cases_confirm))+
     scale_y_continuous(labels = scales::comma)+
+    scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
     annotate(geom = "rect",
              xmin = input$daterange[1], xmax = input$daterange[2],
              ymin = -Inf, ymax = 0, 
@@ -301,12 +329,16 @@ renderPlot({
              ymin = 0, ymax = Inf, 
              alpha = .25,
              fill = "firebrick")+
-    facet_grid(country~.)+
+    facet_wrap(~country, scales = "free")+
     geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(y = seconddif, color = country))+
+    geom_line(aes(y = seconddif, color = country), alpha = .4)+
+    geom_smooth(aes(y = seconddif, color = country), 
+                method = "loess", span = 1/3,
+                se = FALSE, size = 1)+
     labs(x = "",
          y = "Diff cases", 
-         title = "New cases acceleration rate")+
+         title = "New cases acceleration rate", 
+         caption = "Y axes not to scale")+
     theme(panel.grid = element_blank())
 })
 
@@ -322,6 +354,7 @@ renderPlot({
     mutate(seconddif = cases_dead - lag(cases_dead)) %>% 
     ggplot(aes(time, cases_dead))+
     scale_y_continuous(labels = scales::comma)+
+    scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
     annotate(geom = "rect",
              xmin = input$daterange[1], xmax = input$daterange[2],
              ymin = -Inf, ymax = 0, 
@@ -332,12 +365,16 @@ renderPlot({
              ymin = 0, ymax = Inf, 
              alpha = .25,
              fill = "firebrick")+
-    facet_grid(country~.)+
+    facet_wrap(~country, scales = "free")+
     geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(y = seconddif, color = country))+
+    geom_line(aes(y = seconddif, color = country), alpha = .4)+
+    geom_smooth(aes(y = seconddif, color = country), 
+                method = "loess", span = 1/3,
+                se = FALSE, size = 1)+
     labs(x = "",
          y = "Diff cases", 
-         title = "New fatalities acceleration rate")+
+         title = "New fatalities acceleration rate",
+         caption = "Y axes not to scale")+
     theme(panel.grid = element_blank())
 })
 
@@ -359,11 +396,13 @@ About
 ```
 
 
-<!-- **The Coronavirus Dashboard: the case of Poland** -->
+**The Coronavirus Dashboard**
 
-<!-- This Coronavirus dashboard: the case of Poland provides an overview of the 2019 Novel Coronavirus COVID-19 (2019-nCoV) epidemic for Poland. This dashboard is built with R using the R Makrdown framework and was adapted from this [dashboard](https://www.antoinesoetewey.com/files/coronavirus-dashboard.html) by Antoine Soetewey, which in turn was inspired by this other [dashboard](https://ramikrispin.github.io/coronavirus_dashboard/){target="_blank"} by Rami Krispin. -->
+This dashboard summarises the status of the 2019-2020 coronavirus epidemic COVID-19 in the world. The dashboard is build using the  [flexdashboards](https://rmarkdown.rstudio.com/flexdashboard/index.html){target="_blank"} by RStudio and published to [shinyapps.io](https://www.shinyapps.io/){target="_blank"}. 
 
-<!-- **Code** -->
+The data used for this report comes from a variety of sources, gathered in the [`nCov2019` R package](https://github.com/GuangchuangYu/nCov2019){target="_blank"}. This package provides up-to date information about the COVID-19 epidemic. The dataset focuses on China, but it also contains functions to access data from the rest of the world. The package [vignette](https://guangchuangyu.github.io/nCov2019/){target="_blank"} explains the general functionality of the package.
+
+**Code**
 
 <!-- The code behind this dashboard is available on [GitHub](https://github.com/AntoineSoetewey/coronavirus_dashboard){target="_blank"}. -->
 
