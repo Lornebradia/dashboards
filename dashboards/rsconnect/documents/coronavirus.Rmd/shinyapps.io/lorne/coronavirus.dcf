@@ -5,8 +5,8 @@ account: lorne
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2045521
-bundleId: 2965968
+bundleId: 2966323
 url: https://lorne.shinyapps.io/coronavirus/
-when: 1585943659.76629
+when: 1585949564.34097
 asMultiple: FALSE
 asStatic: FALSE
