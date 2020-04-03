@@ -119,7 +119,7 @@ df <- reactive({
 
 
 _Last update_:   
-**`r format(Sys.time(), "%B %d %Y at %H:%M CEST")`**. 
+**`r format(Sys.time(), "%B %d %Y at %H:%M GMT")`**. 
 
 Summary
 =======================================================================
