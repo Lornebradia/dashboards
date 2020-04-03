@@ -31,30 +31,6 @@ active_color <- "#1f77b4"
 recovered_color <- "forestgreen"
 death_color <- "firebrick"
 
-# # Countries table
-# con_table <- read_html("https://meta.wikimedia.org/wiki/List_of_countries_by_regional_classification") %>%
-#   html_node("#content table") %>%
-#   html_table() %>%
-#   select(1:2) %>%
-#   tbl_df() %>%
-#   janitor::clean_names() %>%
-#   mutate(country = case_when(
-#     country == "Congo, The Democratic Republic of the" ~ "Democratic Republic of the Congo",
-#     country == "Congo" ~ "Republic of the Congo",
-#     country == "Virgin Islands, U.S." ~ "Virgin Islands (U.S.)",
-#     country == "Virgin Islands, British" ~ "Virgin Islands",
-#     country == "Russian Federation" ~ "Russia",
-#     country == "Holy See (Vatican City State)" ~ "Holy See  [Vatican City State]",
-#     country == "Tanzania, United Republic of" ~ "Tanzania",
-#     country == "Iran, Islamic Republic of" ~ "Iran",
-#     country == "Moldova, Republic of" ~ "Moldova",
-#     country == "Syrian Arab Republic" ~ "Syria",
-#     country == "Côte D'Ivoire" ~ "Côte d'Ivoire",
-#     country == "Brunei Darussalam" ~ "Brunei",
-#     TRUE ~ country
-#   ))
-
-
 # Theme for plots
 
 theme_set(theme_minimal()+
@@ -98,7 +74,10 @@ Select one or more countries to run the analysis.
 selectizeInput("country", options = list(maxItems = 6),
             label = strong("Select up to six countries"),
             choices = sort(unique(all_ncov$country)),
-            selected = c("Italy", "Spain"), multiple = TRUE)
+            selected = c("Italy", "Spain", 
+                         "United States", "United Kingdom", 
+                         "China", "South Korea"), 
+            multiple = TRUE)
 
 
 ```
