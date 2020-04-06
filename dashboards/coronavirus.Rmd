@@ -14,6 +14,7 @@ output:
 # TODO: revise the list of packages
 # TODO: consider switching to rBokeh
 # TODO: modelling and/or simulation
+# TODO: display most affected countries
 library(shiny)
 # library(rvest)
 library(flexdashboard)
@@ -34,43 +35,49 @@ death_color <- "firebrick"
 
 # Theme for plots
 
-theme_set(theme_minimal()+
-            theme(
-              legend.position = "",
-              plot.title = element_text(
-                size = 15,
-                face = "bold",
-                colour = "grey40"),
-              strip.text = element_text(
-                face = "bold",
-                size = 15),
-              axis.title = element_text(
-                size = 15, 
-                face = "bold"
-              ),
-              axis.text = element_text(
-                size = 13
-              ),
-              plot.caption = element_text(
-                size = 12,
-                face = "bold.italic", 
-                colour = "grey40")
-            )
-)
+theme_set(theme_minimal() +
+  theme(
+    legend.position = "",
+    plot.title = element_text(
+      size = 15,
+      face = "bold",
+      colour = "grey40"
+    ),
+    plot.subtitle = element_text(
+      size = 13,
+      face = "bold.italic",
+      colour = "grey40"
+    ),
+    plot.caption = element_text(
+      size = 12,
+      face = "italic",
+      colour = "grey40"
+    ),
+    strip.text = element_text(
+      face = "bold",
+      size = 15
+    ),
+    axis.title = element_text(
+      size = 15,
+      face = "bold"
+    ),
+    axis.text = element_text(
+      size = 13
+    )
+  ))
 
-all_ncov <- load_nCov2019(lang = "en") %>% 
-  .['global'] %>% 
+all_ncov <- load_nCov2019(lang = "en") %>%
+  .["global"] %>%
   tbl_df()
 
-first_case_date <- all_ncov %>% 
-  group_by(country) %>% 
+first_case_date <- all_ncov %>%
+  group_by(country) %>%
   summarise(first_conf = min(time))
 
-all_ncov %<>% 
-  left_join(first_case_date) %>% 
-  mutate(first_conf = as.numeric(time - first_conf)) %>% 
+all_ncov %<>%
+  left_join(first_case_date) %>%
+  mutate(first_conf = as.numeric(time - first_conf)) %>%
   select(time, first_conf, everything())
-
 ```
 
 
@@ -83,37 +90,47 @@ This dashboard shows causualty information about the COVID-19 epidemic. More inf
 Select one or more countries to run the analysis. 
 
 ```{r}
-selectizeInput("country", options = list(maxItems = 6),
-            label = strong("Select up to six countries"),
-            choices = sort(unique(all_ncov$country)),
-            selected = c("Italy", "Spain", 
-                         "United States", "United Kingdom", 
-                         "China", "South Korea"), 
-            multiple = TRUE)
-
-
+selectizeInput("country",
+  options = list(maxItems = 6),
+  label = strong("Select up to six countries"),
+  choices = sort(unique(all_ncov$country)),
+  selected = c(
+    "Italy", "Spain",
+    "United States", "United Kingdom",
+    "China", "South Korea"
+  ),
+  multiple = TRUE
+)
 ```
 
 Select also a range of dates to filter the data. By default, the data range is set from February 01 2020 to yesterday,  `r format(Sys.Date()-1, "%B %d %Y")`. 
 
 ```{r}
-dateRangeInput("daterange", label = strong("Date Range"),
-               start = min(all_ncov$time),
-               end = max(all_ncov$time))
+# TODO: last update above reflects time of server, not of publication.
+dateRangeInput("daterange",
+  label = strong("Date Range"),
+  start = min(all_ncov$time),
+  end = max(all_ncov$time)
+)
 
 
-checkboxInput("logaxis", label = strong("Use log axis?"), 
-              value = FALSE)
+checkboxInput("logaxis",
+  label = strong("Use log axis?"),
+  value = FALSE
+)
 
-checkboxInput("startconf", 
-              label = strong("Start analysis from first case confirmed?"), 
-              value = FALSE)
+checkboxInput("startconf",
+  label = strong("Start analysis from first case confirmed?"),
+  value = FALSE
+)
 
 df <- reactive({
-  all_ncov %>% 
-    filter(country %in% input$country, 
-           time >= input$daterange[1], 
-           time <= input$daterange[2])
+  all_ncov %>%
+    filter(
+      country %in% input$country,
+      time >= input$daterange[1],
+      time <= input$daterange[2]
+    )
 })
 ```
 
@@ -122,6 +139,105 @@ _Last update_:
 **`r format(Sys.time(), "%B %d %Y at %H:%M GMT")`**. 
 
 Summary
+=======================================================================
+
+<p style="color:red">**WORK IN PROGRESS**</p>
+
+Row {data-height=900}
+-----------------------------------------------------------------------
+
+### **Countries by number of cases**
+
+
+```{r, fig.width=16}
+t1 <- all_ncov %>%
+  filter(time == max(time)) %>%
+  top_n(10, wt = cum_confirm) %>%
+  ggplot(aes(reorder(country, cum_confirm),
+    cum_confirm,
+    fill = cum_confirm
+  )) +
+  geom_bar(stat = "identity", color = "grey60") +
+  geom_label(
+    aes(
+      y = max(cum_confirm),
+      label = cum_confirm,
+      fontface = "bold"
+    ),
+    hjust = 0, nudge_y = 5000, fill = "white", color = "grey30"
+  ) +
+  scale_y_continuous(label = scales::comma) +
+  scale_fill_viridis_c(direction = -1) +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(face = "bold")
+  ) +
+  coord_flip(ylim = c(NA, max(all_ncov$cum_confirm) * 1.2), expand = TRUE) +
+  labs(
+    title = "Top 10 countries by number of cases",
+    subtitle = glue("Latest update on {Sys.Date()-1}"),
+    y = "Cases"
+  )
+
+t2 <- all_ncov %>%
+  filter(time == max(time)) %>%
+  top_n(10, wt = cum_dead) %>%
+  ggplot(aes(reorder(country, cum_dead),
+    cum_dead,
+    fill = cum_dead
+  )) +
+  geom_bar(stat = "identity", color = "grey60") +
+  geom_label(
+    aes(
+      y = max(cum_dead),
+      label = cum_dead,
+      fontface = "bold"
+    ),
+    hjust = 0, nudge_y = 5000, fill = "white", color = "grey30"
+  ) +
+  scale_y_continuous(label = scales::comma) +
+  scale_fill_viridis_c(direction = -1) +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(face = "bold")
+  ) +
+  coord_flip(ylim = c(NA, max(all_ncov$cum_dead) * 1.2), expand = TRUE) +
+  labs(
+    title = "Top 10 countries by number of fatalities",
+    subtitle = glue("Latest update on {Sys.Date()-1}"),
+    y = "Cases"
+  )
+
+t1 + t2
+```
+
+
+Row
+------------------------------------
+
+### 
+
+```{r}
+all_ncov %>% 
+  filter(time == max(time)) %>% 
+  select(country, cum_confirm, cum_dead) %>% 
+  top_n(10, cum_confirm) %>% 
+  pivot_longer(cum_confirm:cum_dead) %>% 
+  ggplot(aes(name, value, group = country)) + 
+  geom_point(aes(color = country))+
+  geom_line(aes(color = country))+
+  # scale_y_log10()+
+  geom_label_repel(aes(label = country, fill = country))+
+  theme(axis.title = element_blank(), 
+        axis.text.y = element_blank(), 
+        panel.grid = element_blank())
+```
+
+###
+
+Moar yada 
+
+Accumulated cases
 =======================================================================
 
 Row 
@@ -142,7 +258,6 @@ renderValueBox({
     color = confirmed_color
   )
 })
-
 ```
 
 ### all confirmed {.value-box}
@@ -160,16 +275,15 @@ renderValueBox({
     color = "slateblue"
   )
 })
-
 ```
 
 ### death {.value-box}
 
 ```{r}
 renderValueBox({
-  max_dead <- df() %>% 
+  max_dead <- df() %>%
     filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_dead = sum(cum_dead)) %>% 
+    summarise(cum_dead = sum(cum_dead)) %>%
     pluck("cum_dead")
   valueBox(
     value = paste(format(max_dead, big.mark = ","), "", sep = " "),
@@ -185,7 +299,7 @@ renderValueBox({
 ```{r}
 renderValueBox({
   all_dead <- all_ncov %>%
-   filter(time == min(input$daterange[2], max(time))) %>%
+    filter(time == min(input$daterange[2], max(time))) %>%
     summarise(cum_dead = sum(cum_dead)) %>%
     pluck("cum_dead")
   valueBox(
@@ -200,7 +314,6 @@ renderValueBox({
 ### recovered {.value-box}
 
 ```{r}
-# TODO: Add recovered
 renderValueBox({
   max_heal <- df() %>%
     filter(time == min(input$daterange[2], max(time))) %>%
@@ -213,7 +326,6 @@ renderValueBox({
     color = recovered_color
   )
 })
-
 ```
 
 ### all confirmed {.value-box}
@@ -231,7 +343,6 @@ renderValueBox({
     color = "darkgreen"
   )
 })
-
 ```
 
 
@@ -245,117 +356,113 @@ renderPlot({
   cumplot <- df() %>%
     mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_confirm)}"), NA))
 
-  if (input$startconf){
+  if (input$startconf) {
     cumplot %<>% ggplot(aes(first_conf, cum_confirm, color = country))
-  }else{
+  } else {
     cumplot %<>% ggplot(aes(time, cum_confirm, color = country))
   }
 
   cumplot <- cumplot +
-    geom_line()+
+    geom_line() +
     geom_label_repel(aes(label = end_label, fill = country),
-                     nudge_x = .1,
-                     nudge_y = .5,
-                     size = 5,
-                     color = "white",
-                     show.legend = FALSE
-    )+
+      nudge_x = .1,
+      nudge_y = .5,
+      size = 5,
+      color = "white",
+      show.legend = FALSE
+    ) +
     labs(caption = glue("Data last updated on {max(df()$time)}"))
 
-  if (input$startconf){
+  if (input$startconf) {
     cumplot <- cumplot + labs(x = "Days elapsed since first confirmed case")
-  }else{
+  } else {
     cumplot <- cumplot + labs(x = "Date")
   }
 
-  
-  if(input$logaxis) {
+
+  if (input$logaxis) {
     cumplot + scale_y_log10("Log number of cases", labels = scales::comma)
-  }else{
+  } else {
     cumplot + scale_y_continuous("Number of cases", labels = scales::comma)
   }
-
 })
-
 ```
 
 ### **Cumulative deaths per country**
 
 ```{r}
 renderPlot({
-  deathplot <- df() %>% 
+  deathplot <- df() %>%
     mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_dead)}"), NA))
-  
-  if (input$startconf){
+
+  if (input$startconf) {
     deathplot %<>% ggplot(aes(first_conf, cum_dead, color = country))
-  }else{
+  } else {
     deathplot %<>% ggplot(aes(time, cum_dead, color = country))
   }
-  
-  
+
+
   deathplot <- deathplot +
-    geom_line()+
+    geom_line() +
     geom_label_repel(aes(label = end_label, fill = country),
-                     nudge_x = .1,
-                     nudge_y = .5,
-                     size = 5,
-                     color = "white",
-                     show.legend = FALSE
-    )+
+      nudge_x = .1,
+      nudge_y = .5,
+      size = 5,
+      color = "white",
+      show.legend = FALSE
+    ) +
     labs(caption = glue("Data last updated on {max(df()$time)}"))
 
-   if (input$startconf){
+  if (input$startconf) {
     deathplot <- deathplot + labs(x = "Days elapsed since first confirmed case")
-  }else{
+  } else {
     deathplot <- deathplot + labs(x = "Date")
   }
 
-  if(input$logaxis) {
+  if (input$logaxis) {
     deathplot + scale_y_log10("Log number of deaths", labels = scales::comma)
-  }else{
+  } else {
     deathplot + scale_y_continuous("Number of deaths", labels = scales::comma)
   }
 })
-
 ```
 
 ### **Cumulative recoveries per country**
 
 ```{r}
 renderPlot({
-  recplot <- df() %>% 
+  recplot <- df() %>%
     mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_heal)}"), NA))
-  
-  if (input$startconf){
+
+  if (input$startconf) {
     recplot %<>% ggplot(aes(first_conf, cum_heal, color = country))
-  }else{
+  } else {
     recplot %<>% ggplot(aes(time, cum_heal, color = country))
   }
-  
+
   recplot <- recplot +
-    geom_line()+
+    geom_line() +
     geom_label_repel(aes(label = end_label, fill = country),
-                     nudge_x = .1,
-                     nudge_y = .5,
-                     size = 5,
-                     color = "white",
-                     show.legend = FALSE
-    )+
+      nudge_x = .1,
+      nudge_y = .5,
+      size = 5,
+      color = "white",
+      show.legend = FALSE
+    ) +
     labs(caption = glue("Data last updated on {max(df()$time)}"))
 
-   if (input$startconf){
+  if (input$startconf) {
     recplot <- recplot + labs(x = "Days elapsed since first confirmed case")
-  }else{
+  } else {
     recplot <- recplot + labs(x = "Date")
   }
 
-  if(input$logaxis) {
+  if (input$logaxis) {
     recplot + scale_y_log10("Log number of recovered", labels = scales::comma)
-  }else{
+  } else {
     recplot + scale_y_continuous("Number of recovered", labels = scales::comma)
   }
 })
-
 ```
 
 Progression
@@ -367,6 +474,7 @@ Row {data-height=750}
 ### **Acceleration of new cases**
 
 ```{r}
+# TODO: Add valueboxes on top with number of daily cases
 # TODO: Refactor as a single function
 
 df_speed <- reactive({
@@ -383,43 +491,49 @@ df_speed <- reactive({
 
 renderPlot({
   d <- df_speed() %>%
-    mutate(seconddif = cases_confirm - lag(cases_confirm)) 
-  dmin <- d %>% 
+    mutate(seconddif = cases_confirm - lag(cases_confirm))
+  dmin <- d %>%
     filter(time == min(time))
-    
-  ggplot(d)+
-    aes(time, seconddif)+
-    geom_rect(data = dmin,
-      aes(xmin = time,
-          xmax = input$daterange[2],
-          ymin = -Inf, ymax = 0),
+
+  ggplot(d) +
+    aes(time, seconddif) +
+    geom_rect(
+      data = dmin,
+      aes(
+        xmin = time,
+        xmax = input$daterange[2],
+        ymin = -Inf, ymax = 0
+      ),
       fill = "forestgreen",
-      alpha = .3)+
-    geom_rect(data = dmin,
-      aes(xmin = time,
-          xmax = input$daterange[2],
-          ymin = 0, ymax = Inf),
+      alpha = .3
+    ) +
+    geom_rect(
+      data = dmin,
+      aes(
+        xmin = time,
+        xmax = input$daterange[2],
+        ymin = 0, ymax = Inf
+      ),
       alpha = .3,
-      fill = "firebrick")+
-    scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
-    scale_y_continuous(labels = scales::comma)+
-    facet_wrap(~country, scales = "free")+
-    geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(color = country), alpha = .8)+
+      fill = "firebrick"
+    ) +
+    scale_x_date(date_breaks = "1 month", date_labels = "%b %d") +
+    scale_y_continuous(labels = scales::comma) +
+    facet_wrap(~country, scales = "free") +
+    geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+    geom_line(aes(color = country), alpha = .8) +
     geom_smooth(aes(color = country),
-      method = "loess", span = 1/3,
-      se = FALSE, size = 1)+
+      method = "loess", span = 1 / 3,
+      se = FALSE, size = 1
+    ) +
     labs(
       x = "",
-      y = "Diff cases", 
-      title = "New cases acceleration rate", 
-      caption = "Y axes not to scale")+
+      y = "Diff cases",
+      title = "New cases acceleration rate",
+      caption = "Y axes not to scale"
+    ) +
     theme(panel.grid = element_blank())
-  
 })
-
-
-
 ```
 
 ### **Acceleration of new fatalities** 
@@ -428,38 +542,48 @@ renderPlot({
 renderPlot({
   d <- df_speed() %>%
     mutate(seconddif = cases_dead - lag(cases_dead))
-  dmin <- d %>% 
+  dmin <- d %>%
     filter(time == min(time))
-  
-  ggplot(d)+
+
+  ggplot(d) +
     aes(time, seconddif) +
-    scale_y_continuous(labels = scales::comma)+
-    scale_x_date(date_breaks = "1 month", date_labels = "%b %d")+
-    geom_rect(data = dmin,
-      aes(xmin = time,
-          xmax = input$daterange[2],
-          ymin = -Inf, ymax = 0),
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_date(date_breaks = "1 month", date_labels = "%b %d") +
+    geom_rect(
+      data = dmin,
+      aes(
+        xmin = time,
+        xmax = input$daterange[2],
+        ymin = -Inf, ymax = 0
+      ),
       fill = "forestgreen",
-      alpha = .3)+
-    geom_rect(data = dmin,
-      aes(xmin = time,
-          xmax = input$daterange[2],
-          ymin = 0, ymax = Inf),
+      alpha = .3
+    ) +
+    geom_rect(
+      data = dmin,
+      aes(
+        xmin = time,
+        xmax = input$daterange[2],
+        ymin = 0, ymax = Inf
+      ),
       alpha = .3,
-      fill = "firebrick")+
-    facet_wrap(~country, scales = "free")+
-    geom_hline(yintercept = 0, color = "grey50", linetype = 2)+
-    geom_line(aes(color = country), alpha = .8)+
-    geom_smooth(aes(color = country), 
-                method = "loess", span = 1/3,
-                se = FALSE, size = 1)+
-    labs(x = "",
-         y = "Diff cases", 
-         title = "New fatalities acceleration rate",
-         caption = "Y axes not to scale")+
+      fill = "firebrick"
+    ) +
+    facet_wrap(~country, scales = "free") +
+    geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+    geom_line(aes(color = country), alpha = .8) +
+    geom_smooth(aes(color = country),
+      method = "loess", span = 1 / 3,
+      se = FALSE, size = 1
+    ) +
+    labs(
+      x = "",
+      y = "Diff cases",
+      title = "New fatalities acceleration rate",
+      caption = "Y axes not to scale"
+    ) +
     theme(panel.grid = element_blank())
 })
-
 ```
 
 
@@ -510,4 +634,3 @@ The data and dashboard are refreshed on a daily basis.
 **Contact**
 
 Comments & suggestions welcome! You can [open an issue](https://github.com/Lornebradia/dashboards/issues/new){target="_blank"} in the repository for the dashboard. 
-
