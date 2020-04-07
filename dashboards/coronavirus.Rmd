@@ -218,19 +218,19 @@ Row
 ### 
 
 ```{r}
-all_ncov %>% 
-  filter(time == max(time)) %>% 
-  select(country, cum_confirm, cum_dead) %>% 
-  top_n(10, cum_confirm) %>% 
-  pivot_longer(cum_confirm:cum_dead) %>% 
-  ggplot(aes(name, value, group = country)) + 
-  geom_point(aes(color = country))+
-  geom_line(aes(color = country))+
-  # scale_y_log10()+
-  geom_label_repel(aes(label = country, fill = country))+
-  theme(axis.title = element_blank(), 
-        axis.text.y = element_blank(), 
-        panel.grid = element_blank())
+# all_ncov %>% 
+#   filter(time == max(time)) %>% 
+#   select(country, cum_confirm, cum_dead) %>% 
+#   top_n(10, cum_confirm) %>% 
+#   pivot_longer(cum_confirm:cum_dead) %>% 
+#   ggplot(aes(name, value, group = country)) + 
+#   geom_point(aes(color = country))+
+#   geom_line(aes(color = country))+
+#   scale_y_log10()+
+#   geom_label_repel(aes(label = country, fill = country))+
+#   theme(axis.title = element_blank(), 
+#         axis.text.y = element_blank(), 
+#         panel.grid = element_blank())
 ```
 
 ###
