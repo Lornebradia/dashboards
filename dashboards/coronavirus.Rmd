@@ -191,9 +191,9 @@ t2 <- all_ncov %>%
     aes(
       y = max(cum_dead),
       label = cum_dead,
-      fontface = "bold"
+      fontface = "bold",
     ),
-    hjust = 0, nudge_y = 5000, fill = "white", color = "grey30"
+    hjust = 0, nudge_y = 200, fill = "white", color = "grey30"
   ) +
   scale_y_continuous(label = scales::comma) +
   scale_fill_viridis_c(direction = -1) +
