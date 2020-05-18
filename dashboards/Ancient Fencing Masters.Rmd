@@ -1,0 +1,121 @@
+---
+title: "Ancient Fencing Masters"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(tidyr)
+
+masters <- tribble(
+  ~master, ~country, ~school, ~born, ~died, ~lborn, ~ldied,
+  "Francisco Lorenz de Rada y Arenaza", "Spain", "Verdadera Destreza", 1660, 1713, "1660", "1713", 
+  "Francisco Antonio de Ettenhard y Abarca", "Spain", "Verdadera Destreza", 1650, 1701, "1650", "1701",
+  "Luís Méndez de Carmona Tamariz", "Spain", "Verdadera Destreza", 1601, 1660, "1601", "?", 
+  "Diogo Gomes de Figueyredo", "Portugal", "Verdadera Destreza", 1600, 1685, "1600?", "1685",
+  "Luís Díaz de Viedma", "Spain", "Verdadera Destreza", 1590, 1650, "?", "?",
+  "Gérard Thibault d'Anvers", "Netherlands", "Verdadera Destreza", 1574, 1629, "1574", "1629",
+  "Luís Pacheco de Narváez", "Spain", "Verdadera Destreza", 1570, 1640, "1570", "1640",
+  "Ridolfo Capo Ferro da Cagli", "Italy", "Italian School", 1550, 1625, "?", "?",
+  "Nicoletto Giganti", "Italy", "Venetian School", 1550, 1622, "1550", "1622",
+  "Salvator Fabris", "Italy", "Italian School", 1544, 1618, "1544", "1618",
+  "Jerónimo Sánchez de Carranza", "Spain", "Verdadera Destreza", 1539, 1600, "1539", "1600",
+  "Domingo Luis Godinho", "Portugal", "Common Destreza", 1540, 1610, "?", "?",
+  "Joachim Meyer", "Germany", "German School", 1537, 1571, "ca. 1537", "1571",
+  "Paulus Hector Mair", "Germany", "German School", 1517, 1572, "1517", "1572",
+  "Camillo Agrippa", "Italy", "Italian School", 1510, 1595, "1510", "1595", 
+  "Francisco Román", "Spain", "Common Destreza", 1490, 1550, "?", "?",
+  "Achille Marozzo", "Italy", "Bolognese Tradition", 1484, 1553, "1484", "1553",
+  "Pedro de la Torre", "Spain", "Common Destreza", 1400, 1490, "?", "?",
+  "Jaume Pons", "Spain", "Common Destreza", 1400, 1480, "?", "?",
+  "Johannes Lichtenauer", "Germany", "German School", 1375, 1450, "?", "?",
+  "Fiore dei Liberi", "Italy", "Imperial", 1340, 1420, "1340", "1420"
+) %>%
+
+  mutate_if(Negate(is.numeric), forcats::as_factor)
+
+works <- tribble(
+  ~title, ~master, ~year, 
+  "MSS Dresd C.93/C.94", "Paulus Hector Mair", 1540,
+  "MS A.4º.2", "Joachim Meyer", 1565,
+  "Academy of the Sword: wherein is demonstrated by mathematical rules on the foundation of a mysterious circle the theory and practice of the true and heretofore unknown secrets of handling arms on foot and horseback", "Gérard Thibault d'Anvers", 1630,
+  "Libro de la destreza verdadera de las armas", "Luís Méndez de Carmona Tamariz", 1639,
+  "Fior di Battaglia", "Fiore dei Liberi", 1400,
+  "Flos Duellatorum", "Fiore dei Liberi", 1409,
+  "Compendio de los fundamentos de la verdadera destreza y filosofía de las armas", "Francisco Antonio de Ettenhard y Abarca", 1675,
+  "Diestro italiano y español", "Francisco Antonio de Ettenhard y Abarca", 1697,
+  "<Unknown title", "Pedro de la Torre", 1474,
+  "Método de la Enseñanza de Maestros", "Luís Díaz de Viedma", 1639,
+  "Defensa de la verdadera destreza", "Francisco Lorenz de Rada y Arenaza", 1712,
+  "Nobleza de la espada", "Francisco Lorenz de Rada y Arenaza", 1705,
+  "Oplosophia e Verdadeira Destreza das Armas", "Diogo Gomes de Figueyredo", 1628,
+  "Memorial Da Prattica do Montante", "Diogo Gomes de Figueyredo", 1653,
+  "De la Filosofía de las Armas y de su Destreza y la Agresión y Defensa Cristiana", "Jerónimo Sánchez de Carranza", 1569,
+  "Gran Simulacro dell'Arte e dell'Uso della Scherma", "Ridolfo Capo Ferro da Cagli", 1610, 
+  "Libro de las grandezas de la espada, en qve se declaran mvchos secretos del que compuso el Commendador Geronimo de Carranza", "Luís Pacheco de Narváez", 1600, 
+  "Las Cien conclusiones o formas de saber de la verdadera destreza", "Luís Pacheco de Narváez", 1608,
+  "Al duque de Cea", "Luís Pacheco de Narváez", 1618, 
+  "Modo fácil y nuevo para examinarse los maestros en la destreza de las armas", "Luís Pacheco de Narváez", 1625,
+  "Engaño y desengaño de los errores que se han querido introducir en la destreza de las armas", "Luís Pacheco de Narváez", 1635, 
+  "Advertencias para la enseñanza de la filosofía y destreza de las armas así a pie como a caballo", "Luís Pacheco de Narváez", 1639, 
+  "Nueva Ciencia y Filosofía de la destreza de las armas", "Luís Pacheco de Narváez", 1672
+) %>% 
+  mutate(master = factor(master, levels = masters$master)) 
+
+
+works <- right_join(masters %>% select(master, country), 
+                    works,
+                    by = "master")
+
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### **Fencing masters the Middle Ages and the Renaissance**
+
+```{r}
+ggplot(
+  masters,
+  aes(
+    x = born,
+    y = master
+  )
+) +
+  geom_segment(aes(
+    x = born, xend = died,
+    y = master, yend = master,
+    color = school
+  ),
+  lineend = "round",
+  size = 3
+  ) +
+  geom_text(aes(x = born, y = master, label = lborn), hjust = 1.5, size = 2) +
+  geom_text(aes(x = died, y = master, label = ldied), hjust = -0.5, size = 2) +
+  geom_point(data = works, aes(x = year, y = master), color = "grey40")+
+  facet_grid(country ~ ., scales = "free", space = "free") +
+  theme_light() +
+  scale_x_continuous("", limits = c(1300, 1750)) +
+  scale_y_discrete("") +
+  theme(
+    legend.position = "bottom",
+    strip.text.y = element_text(angle = 0),
+    legend.title = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    axis.text.x = element_text(size = 5),
+    axis.text.y = element_text(face = "bold", size = 5)
+  ) +
+  guides(color = guide_legend(nrow = 2)) +
+  labs(title = "")
+
+
+
+
+```
+
