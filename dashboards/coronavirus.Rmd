@@ -1,6 +1,6 @@
 ---
 title: "Coronavirus Analysis"
-runtime: shiny
+rundate: shiny
 output: 
   flexdashboard::flex_dashboard:
     storyboard: true
@@ -8,6 +8,7 @@ output:
     # social: ["facebook", "twitter", "linkedin"]
     # source_code: embed
     vertical_layout: fill
+runtime: shiny
 ---
 
 ```{r global, include=FALSE}
@@ -25,7 +26,8 @@ library(lubridate)
 library(rmarkdown)
 library(patchwork)
 library(ggrepel)
-library(nCov2019)
+library(gghighlight)
+library(tidycovid19)
 
 # Set colors
 confirmed_color <- "purple"
@@ -66,18 +68,16 @@ theme_set(theme_minimal() +
     )
   ))
 
-all_ncov <- load_nCov2019(lang = "en") %>%
-  .["global"] %>%
-  tbl_df()
+all_data <- download_merged_data(silent = TRUE, cached = TRUE)
 
-first_case_date <- all_ncov %>%
-  group_by(country) %>%
-  summarise(first_conf = min(time))
-
-all_ncov %<>%
-  left_join(first_case_date) %>%
-  mutate(first_conf = as.numeric(time - first_conf)) %>%
-  select(time, first_conf, everything())
+# first_case_date <- all_data %>%
+#   group_by(country) %>%
+#   summarise(first_conf = min(date))
+# 
+# all_data %<>%
+#   left_join(first_case_date) %>%
+#   mutate(first_conf = as.numeric(date - first_conf)) %>%
+#   select(date, first_conf, everything())
 ```
 
 
@@ -93,7 +93,7 @@ Select one or more countries to run the analysis.
 selectizeInput("country",
   options = list(maxItems = 6),
   label = strong("Select up to six countries"),
-  choices = sort(unique(all_ncov$country)),
+  choices = sort(unique(all_data$country)),
   selected = c(
     "Italy", "Spain",
     "United States", "United Kingdom",
@@ -106,11 +106,11 @@ selectizeInput("country",
 Select also a range of dates to filter the data. By default, the data range is set from February 01 2020 to yesterday,  `r format(Sys.Date()-1, "%B %d %Y")`. 
 
 ```{r}
-# TODO: last update above reflects time of server, not of publication.
+# TODO: last update above reflects date of server, not of publication.
 dateRangeInput("daterange",
   label = strong("Date Range"),
-  start = min(all_ncov$time),
-  end = max(all_ncov$time)
+  start = min(all_data$date),
+  end = max(all_data$date)
 )
 
 
@@ -125,18 +125,18 @@ checkboxInput("startconf",
 )
 
 df <- reactive({
-  all_ncov %>%
+  all_data %>%
     filter(
       country %in% input$country,
-      time >= input$daterange[1],
-      time <= input$daterange[2]
+      date >= input$daterange[1],
+      date <= input$daterange[2]
     )
 })
 ```
 
 
 _Last update_:   
-**`r format(Sys.time(), "%B %d %Y at %H:%M GMT")`**. 
+**`r format(Sys.Date(), "%B %d %Y at %H:%M GMT")`**. 
 
 Summary
 =======================================================================
@@ -149,19 +149,19 @@ Row {data-height=900}
 ### **Countries by number of cases**
 
 
-```{r, fig.width=16}
-t1 <- all_ncov %>%
-  filter(time == max(time)) %>%
-  top_n(10, wt = cum_confirm) %>%
-  ggplot(aes(reorder(country, cum_confirm),
-    cum_confirm,
-    fill = cum_confirm
+```{r, fig.width=16, eval=FALSE}
+t1 <- all_data %>%
+  filter(date == max(date)) %>%
+  top_n(10, wt = confirmed) %>%
+  ggplot(aes(reorder(country, confirmed),
+    confirmed,
+    fill = confirmed
   )) +
   geom_bar(stat = "identity", color = "grey60") +
   geom_label(
     aes(
-      y = max(cum_confirm),
-      label = cum_confirm,
+      y = max(confirmed),
+      label = confirmed,
       fontface = "bold"
     ),
     hjust = 0, nudge_y = 5000, fill = "white", color = "grey30"
@@ -172,15 +172,15 @@ t1 <- all_ncov %>%
     axis.title.y = element_blank(),
     axis.text.y = element_text(face = "bold")
   ) +
-  coord_flip(ylim = c(NA, max(all_ncov$cum_confirm) * 1.2), expand = TRUE) +
+  coord_flip(ylim = c(NA, max(all_data$confirmed) * 1.2), expand = TRUE) +
   labs(
     title = "Top 10 countries by number of cases",
     subtitle = glue("Latest update on {Sys.Date()-1}"),
     y = "Cases"
   )
 
-t2 <- all_ncov %>%
-  filter(time == max(time)) %>%
+t2 <- all_data %>%
+  filter(date == max(date)) %>%
   top_n(10, wt = cum_dead) %>%
   ggplot(aes(reorder(country, cum_dead),
     cum_dead,
@@ -201,7 +201,7 @@ t2 <- all_ncov %>%
     axis.title.y = element_blank(),
     axis.text.y = element_text(face = "bold")
   ) +
-  coord_flip(ylim = c(NA, max(all_ncov$cum_dead) * 1.2), expand = TRUE) +
+  coord_flip(ylim = c(NA, max(all_data$cum_dead) * 1.2), expand = TRUE) +
   labs(
     title = "Top 10 countries by number of fatalities",
     subtitle = glue("Latest update on {Sys.Date()-1}"),
@@ -218,11 +218,11 @@ Row
 ### 
 
 ```{r}
-# all_ncov %>% 
-#   filter(time == max(time)) %>% 
-#   select(country, cum_confirm, cum_dead) %>% 
-#   top_n(10, cum_confirm) %>% 
-#   pivot_longer(cum_confirm:cum_dead) %>% 
+# all_data %>% 
+#   filter(date == max(date)) %>% 
+#   select(country, confirmed, cum_dead) %>% 
+#   top_n(10, confirmed) %>% 
+#   pivot_longer(confirmed:cum_dead) %>% 
 #   ggplot(aes(name, value, group = country)) + 
 #   geom_point(aes(color = country))+
 #   geom_line(aes(color = country))+
@@ -248,9 +248,9 @@ Row
 ```{r}
 renderValueBox({
   max_conf <- df() %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_confirm = sum(cum_confirm)) %>%
-    pluck("cum_confirm")
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(confirmed = sum(confirmed, na.rm = TRUE)) %>%
+    pluck("confirmed")
   valueBox(
     value = paste(format(max_conf, big.mark = ","), "", sep = " "),
     caption = "Total confirmed cases in the countries selected to date",
@@ -263,11 +263,12 @@ renderValueBox({
 ### all confirmed {.value-box}
 
 ```{r}
+# TODO: here and above replace to date to two days ago
 renderValueBox({
-  all_conf <- all_ncov %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_confirm = sum(cum_confirm)) %>%
-    pluck("cum_confirm")
+  all_conf <- all_data %>%
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(confirmed = sum(confirmed, na.rm = TRUE)) %>%
+    pluck("confirmed")
   valueBox(
     value = paste(format(all_conf, big.mark = ","), "", sep = " "),
     caption = "Worldwide confirmed cases to date",
@@ -282,9 +283,9 @@ renderValueBox({
 ```{r}
 renderValueBox({
   max_dead <- df() %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_dead = sum(cum_dead)) %>%
-    pluck("cum_dead")
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(deaths = sum(deaths, na.rm = TRUE)) %>%
+    pluck("deaths")
   valueBox(
     value = paste(format(max_dead, big.mark = ","), "", sep = " "),
     caption = "Total confirmed deaths in the countries selected to date",
@@ -298,10 +299,10 @@ renderValueBox({
 
 ```{r}
 renderValueBox({
-  all_dead <- all_ncov %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_dead = sum(cum_dead)) %>%
-    pluck("cum_dead")
+  all_dead <- all_data %>%
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(deaths = sum(deaths, na.rm = TRUE)) %>%
+    pluck("deaths")
   valueBox(
     value = paste(format(all_dead, big.mark = ","), "", sep = " "),
     caption = "Worldwide confirmed deaths to date",
@@ -316,9 +317,9 @@ renderValueBox({
 ```{r}
 renderValueBox({
   max_heal <- df() %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_heal = sum(cum_heal)) %>%
-    pluck("cum_heal")
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(recovered = sum(recovered, na.rm = TRUE)) %>%
+    pluck("recovered")
   valueBox(
     value = paste(format(max_heal, big.mark = ","), "", sep = " "),
     caption = "Total recovered cases in the countries selected to date",
@@ -332,10 +333,10 @@ renderValueBox({
 
 ```{r}
 renderValueBox({
-  all_heal <- all_ncov %>%
-    filter(time == min(input$daterange[2], max(time))) %>%
-    summarise(cum_heal = sum(cum_heal)) %>%
-    pluck("cum_heal")
+  all_heal <- all_data %>%
+    filter(date == min(input$daterange[2], max(date)-2)) %>%
+    summarise(recovered = sum(recovered, na.rm = TRUE)) %>%
+    pluck("recovered")
   valueBox(
     value = paste(format(all_heal, big.mark = ","), "", sep = " "),
     caption = "Worldwide recovered cases to date",
@@ -354,12 +355,12 @@ Row {.tabset}
 ```{r}
 renderPlot({
   cumplot <- df() %>%
-    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_confirm)}"), NA))
+    mutate(end_label = ifelse(date == max(date), glue("{country}: {scales::comma(confirmed)}"), NA))
 
   if (input$startconf) {
-    cumplot %<>% ggplot(aes(first_conf, cum_confirm, color = country))
+    cumplot %<>% ggplot(aes(first_conf, confirmed, color = country))
   } else {
-    cumplot %<>% ggplot(aes(time, cum_confirm, color = country))
+    cumplot %<>% ggplot(aes(date, confirmed, color = country))
   }
 
   cumplot <- cumplot +
@@ -371,7 +372,7 @@ renderPlot({
       color = "white",
       show.legend = FALSE
     ) +
-    labs(caption = glue("Data last updated on {max(df()$time)}"))
+    labs(caption = glue("Data last updated on {max(df()$date)}"))
 
   if (input$startconf) {
     cumplot <- cumplot + labs(x = "Days elapsed since first confirmed case")
@@ -393,12 +394,12 @@ renderPlot({
 ```{r}
 renderPlot({
   deathplot <- df() %>%
-    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_dead)}"), NA))
+    mutate(end_label = ifelse(date == max(date), glue("{country}: {scales::comma(cum_dead)}"), NA))
 
   if (input$startconf) {
     deathplot %<>% ggplot(aes(first_conf, cum_dead, color = country))
   } else {
-    deathplot %<>% ggplot(aes(time, cum_dead, color = country))
+    deathplot %<>% ggplot(aes(date, cum_dead, color = country))
   }
 
 
@@ -411,7 +412,7 @@ renderPlot({
       color = "white",
       show.legend = FALSE
     ) +
-    labs(caption = glue("Data last updated on {max(df()$time)}"))
+    labs(caption = glue("Data last updated on {max(df()$date)}"))
 
   if (input$startconf) {
     deathplot <- deathplot + labs(x = "Days elapsed since first confirmed case")
@@ -432,12 +433,12 @@ renderPlot({
 ```{r}
 renderPlot({
   recplot <- df() %>%
-    mutate(end_label = ifelse(time == max(time), glue("{country}: {scales::comma(cum_heal)}"), NA))
+    mutate(end_label = ifelse(date == max(date), glue("{country}: {scales::comma(cum_heal)}"), NA))
 
   if (input$startconf) {
     recplot %<>% ggplot(aes(first_conf, cum_heal, color = country))
   } else {
-    recplot %<>% ggplot(aes(time, cum_heal, color = country))
+    recplot %<>% ggplot(aes(date, cum_heal, color = country))
   }
 
   recplot <- recplot +
@@ -449,7 +450,7 @@ renderPlot({
       color = "white",
       show.legend = FALSE
     ) +
-    labs(caption = glue("Data last updated on {max(df()$time)}"))
+    labs(caption = glue("Data last updated on {max(df()$date)}"))
 
   if (input$startconf) {
     recplot <- recplot + labs(x = "Days elapsed since first confirmed case")
@@ -479,10 +480,10 @@ Row {data-height=750}
 
 df_speed <- reactive({
   df() %>%
-    arrange(country, time) %>%
+    arrange(country, date) %>%
     group_by(country) %>%
     mutate(
-      cases_confirm = cum_confirm - lag(cum_confirm),
+      cases_confirm = confirmed - lag(confirmed),
       cases_recover = cum_heal - lag(cum_heal),
       cases_dead = cum_dead - lag(cum_dead)
     ) %>%
@@ -493,14 +494,14 @@ renderPlot({
   d <- df_speed() %>%
     mutate(seconddif = cases_confirm - lag(cases_confirm))
   dmin <- d %>%
-    filter(time == min(time))
+    filter(date == min(date))
 
   ggplot(d) +
-    aes(time, seconddif) +
+    aes(date, seconddif) +
     geom_rect(
       data = dmin,
       aes(
-        xmin = time,
+        xmin = date,
         xmax = input$daterange[2],
         ymin = -Inf, ymax = 0
       ),
@@ -510,7 +511,7 @@ renderPlot({
     geom_rect(
       data = dmin,
       aes(
-        xmin = time,
+        xmin = date,
         xmax = input$daterange[2],
         ymin = 0, ymax = Inf
       ),
@@ -543,16 +544,16 @@ renderPlot({
   d <- df_speed() %>%
     mutate(seconddif = cases_dead - lag(cases_dead))
   dmin <- d %>%
-    filter(time == min(time))
+    filter(date == min(date))
 
   ggplot(d) +
-    aes(time, seconddif) +
+    aes(date, seconddif) +
     scale_y_continuous(labels = scales::comma) +
     scale_x_date(date_breaks = "1 month", date_labels = "%b %d") +
     geom_rect(
       data = dmin,
       aes(
-        xmin = time,
+        xmin = date,
         xmax = input$daterange[2],
         ymin = -Inf, ymax = 0
       ),
@@ -562,7 +563,7 @@ renderPlot({
     geom_rect(
       data = dmin,
       aes(
-        xmin = time,
+        xmin = date,
         xmax = input$daterange[2],
         ymin = 0, ymax = Inf
       ),
@@ -592,7 +593,7 @@ Row
 
 ### **Progression of COVID-19**
 
-Speed of the disease can be defined as the rate in which new cases or new fatalities appear. In this sense, **speed** is just the number of new cases reported per day. A speed of zero means no new cases ocurred. In this context, speed cannot be below zero, as it would be meaningless (although sometimes a negative number is reported to correct previously inflated cases, a general bad practice). 
+Speed of the disease can be defined as the rate in which new cases or new fatalities appear. In this sense, **speed** is just the number of new cases reported per day. A speed of zero means no new cases ocurred. In this context, speed cannot be below zero, as it would be meaningless (although somedates a negative number is reported to correct previously inflated cases, a general bad practice). 
 
 **Acceleration** is therefore the _second order difference_, that is, the difference between today's speed and yesterday's. An acceleration of _zero_ means that today's increase is the same as yesterday's, and an _negative_ acceleration means that the rate at which new cases happen is reducing. A _positive_ acceleration, on the other hand, means that the rate of new cases is increasing - today's new cases is larger than yesterday's. 
 
